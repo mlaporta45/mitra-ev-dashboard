@@ -65,11 +65,16 @@ def extract_from_pptx(data: bytes) -> str:
     return "\n\n".join(parts)
 
 
+_SKIP_SHEET_KEYWORDS = ("gl tb", "general ledger", "trial balance", "gl detail", "raw data")
+
 def extract_from_excel(data: bytes) -> str:
     import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True, read_only=True)
     parts = []
     for sheet_name in wb.sheetnames:
+        # Skip raw general ledger / trial balance sheets — too large, not useful for KPI extraction
+        if any(kw in sheet_name.lower() for kw in _SKIP_SHEET_KEYWORDS):
+            continue
         ws = wb[sheet_name]
         rows = []
         for row in ws.iter_rows(values_only=True):
