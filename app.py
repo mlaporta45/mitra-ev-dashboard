@@ -25,7 +25,7 @@ from database import (
     METRIC_NAMES,
     COVENANT_DEFINITIONS,
 )
-from extractor import extract_text, file_hash, get_last_excel_diagnostics
+from extractor import extract_text, file_hash, get_last_excel_diagnostics, inspect_excel_sheets
 from analyzer import extract_and_analyze
 from excel_export import build_excel_export
 
@@ -309,7 +309,23 @@ elif page == "📤 Upload":
         value=False,
     )
 
-    if st.button("⚡ Process Files", type="primary", disabled=not uploaded):
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        do_process = st.button("⚡ Process Files", type="primary", disabled=not uploaded)
+    with col2:
+        do_inspect = st.button("🔍 Inspect sheets (free, no AI)", disabled=not uploaded)
+
+    if do_inspect and uploaded:
+        for uf in uploaded:
+            if uf.name.lower().endswith((".xlsx", ".xlsm", ".xls", ".xlsb")):
+                info = inspect_excel_sheets(uf.read())
+                st.markdown(f"**{uf.name}** — sheets: `{info['sheets']}`")
+                for sname, rows in info["previews"].items():
+                    with st.expander(f"Sheet: {sname}"):
+                        for r in rows:
+                            st.text(" | ".join(r))
+
+    if do_process:
         for uf in uploaded:
             data = uf.read()
             fhash = file_hash(data)

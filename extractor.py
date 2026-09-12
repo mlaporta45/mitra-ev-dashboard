@@ -79,9 +79,12 @@ def _precompute_mitra_metrics(wb) -> tuple[str, list[str]]:
     all_sheets = wb.sheetnames
     diagnostics.append(f"Excel sheets found: {all_sheets}")
 
-    # --- Vehicles in Service: Fleet List sheet, column M = "VEH. STATUS", count "In-Service" ---
+    # --- Vehicles in Service: Fleet List sheet, any column with vehicle status ---
+    _fleet_keywords = ("fleet list", "fleet", "vehicle list", "vehicles", "truck list", "trucks",
+                        "part i ", "part i-", "part 1", "mla", "vehicle detail")
     fleet_sheet = next(
-        (s for s in wb.sheetnames if "fleet list" in s.lower() or re.search(r'\bpart\s+i\b', s, re.IGNORECASE)),
+        (s for s in wb.sheetnames if any(kw in s.lower() for kw in _fleet_keywords)
+         or re.search(r'\bpart\s+i\b', s, re.IGNORECASE)),
         None,
     )
     diagnostics.append(f"Fleet sheet match: {fleet_sheet!r}")
@@ -90,21 +93,26 @@ def _precompute_mitra_metrics(wb) -> tuple[str, list[str]]:
         header_row = None
         status_col = None
         for i, row in enumerate(ws.iter_rows(values_only=True), start=1):
-            if row and any("status" in str(c).lower() for c in row if c):
+            if row and any(c and "status" in str(c).lower() for c in row):
                 header_row = i
                 for j, c in enumerate(row):
-                    if c and "veh. status" in str(c).lower():
+                    if c and "status" in str(c).lower():
                         status_col = j
                         break
                 if status_col is not None:
                     break
+        diagnostics.append(f"Fleet header row: {header_row}, status col: {status_col}")
         if status_col is not None and header_row is not None:
             in_service = 0
+            status_values = set()
             for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
                 val = row[status_col] if len(row) > status_col else None
-                if val and "in-service" in str(val).lower():
-                    in_service += 1
-            computed.append(f"PRE-COMPUTED Vehicles in Service (counted from Fleet List, VEH. STATUS = In-Service): {in_service}")
+                if val:
+                    status_values.add(str(val).strip())
+                    if "in-service" in str(val).lower() or "in service" in str(val).lower() or str(val).strip().lower() == "active":
+                        in_service += 1
+            diagnostics.append(f"Fleet status values seen: {sorted(status_values)[:10]}")
+            computed.append(f"PRE-COMPUTED Vehicles in Service (counted from Fleet List, status = In-Service): {in_service}")
 
     # --- DCFC In Service + Avg Utilization: Part IV DCFC Utilization sheet ---
     dcfc_sheet = next(
@@ -247,6 +255,20 @@ def extract_from_excel(data: bytes) -> str:
 
 def get_last_excel_diagnostics() -> list[str]:
     return list(_last_excel_diagnostics)
+
+
+def inspect_excel_sheets(data: bytes) -> dict:
+    """Free inspection — no AI call. Returns sheet names and first few rows of each."""
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
+    result = {"sheets": wb.sheetnames, "previews": {}}
+    for name in wb.sheetnames:
+        ws = wb[name]
+        rows = []
+        for row in ws.iter_rows(min_row=1, max_row=3, values_only=True):
+            rows.append([str(c) if c is not None else "" for c in row[:10]])
+        result["previews"][name] = rows
+    return result
 
 
 def extract_text(filename: str, data: bytes) -> str:
