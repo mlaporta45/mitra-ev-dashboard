@@ -81,6 +81,15 @@ def init_db():
     conn.close()
 
 
+def file_already_processed(file_hash: str) -> bool:
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT id FROM documents WHERE file_hash=?", (file_hash,)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
 def insert_document(filename: str, period: str, file_hash: str) -> Optional[int]:
     conn = get_connection()
     try:

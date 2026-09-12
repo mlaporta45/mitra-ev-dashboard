@@ -18,6 +18,7 @@ from database import (
     get_metric_timeseries,
     get_all_metrics_wide,
     get_documents,
+    file_already_processed,
     insert_document,
     upsert_metrics,
     upsert_covenants,
@@ -310,6 +311,10 @@ elif page == "📤 Upload":
 
             with st.expander(f"📄 {uf.name}", expanded=True):
                 log = st.empty()
+
+                if file_already_processed(fhash):
+                    log.success("✅ Already processed — no API call needed (file unchanged).")
+                    continue
 
                 log.info("Extracting text...")
                 try:
