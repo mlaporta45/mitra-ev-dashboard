@@ -1,4 +1,5 @@
 import io
+import re
 import hashlib
 from pathlib import Path
 
@@ -77,7 +78,7 @@ def _precompute_mitra_metrics(wb) -> str:
 
     # --- Vehicles in Service: Fleet List sheet, column M = "VEH. STATUS", count "In-Service" ---
     fleet_sheet = next(
-        (s for s in wb.sheetnames if "fleet list" in s.lower() or "part i" in s.lower()),
+        (s for s in wb.sheetnames if "fleet list" in s.lower() or re.search(r'\bpart\s+i\b', s, re.IGNORECASE)),
         None,
     )
     if fleet_sheet:
