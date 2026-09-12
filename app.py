@@ -25,7 +25,7 @@ from database import (
     METRIC_NAMES,
     COVENANT_DEFINITIONS,
 )
-from extractor import extract_text, file_hash
+from extractor import extract_text, file_hash, get_last_excel_diagnostics
 from analyzer import extract_and_analyze
 from excel_export import build_excel_export
 
@@ -327,6 +327,14 @@ elif page == "📤 Upload":
                 except Exception as e:
                     log.error(f"Extraction failed: {e}")
                     continue
+
+                # Show sheet diagnostics for Excel files
+                if uf.name.lower().endswith((".xlsx", ".xlsm", ".xls", ".xlsb")):
+                    diags = get_last_excel_diagnostics()
+                    if diags:
+                        with st.expander("🔍 Excel sheet diagnostics", expanded=True):
+                            for d in diags:
+                                st.text(d)
 
                 log.info("Analyzing with AI (this may take ~20 seconds)...")
                 try:

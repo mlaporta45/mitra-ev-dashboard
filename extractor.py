@@ -69,18 +69,22 @@ def extract_from_pptx(data: bytes) -> str:
 _SKIP_SHEET_KEYWORDS = ("gl tb", "general ledger", "trial balance", "gl detail", "raw data")
 
 
-def _precompute_mitra_metrics(wb) -> str:
+def _precompute_mitra_metrics(wb) -> tuple[str, list[str]]:
     """
     Pre-compute metrics that require counting/averaging across rows.
-    Returns a pre-computed summary block to prepend to the document text.
+    Returns (pre-computed summary block, list of diagnostic messages).
     """
     computed = []
+    diagnostics = []
+    all_sheets = wb.sheetnames
+    diagnostics.append(f"Excel sheets found: {all_sheets}")
 
     # --- Vehicles in Service: Fleet List sheet, column M = "VEH. STATUS", count "In-Service" ---
     fleet_sheet = next(
         (s for s in wb.sheetnames if "fleet list" in s.lower() or re.search(r'\bpart\s+i\b', s, re.IGNORECASE)),
         None,
     )
+    diagnostics.append(f"Fleet sheet match: {fleet_sheet!r}")
     if fleet_sheet:
         ws = wb[fleet_sheet]
         header_row = None
@@ -107,6 +111,10 @@ def _precompute_mitra_metrics(wb) -> str:
         (s for s in wb.sheetnames if "dcfc" in s.lower() and "util" in s.lower()),
         None,
     )
+    if not dcfc_sheet:
+        # Broaden search: any sheet with "dcfc"
+        dcfc_sheet = next((s for s in wb.sheetnames if "dcfc" in s.lower()), None)
+    diagnostics.append(f"DCFC sheet match: {dcfc_sheet!r}")
     if dcfc_sheet:
         ws = wb[dcfc_sheet]
         # Find header row (has "startTimestamp" and "Utilization")
@@ -151,6 +159,7 @@ def _precompute_mitra_metrics(wb) -> str:
         (s for s in wb.sheetnames if "income statement" in s.lower()),
         None,
     )
+    diagnostics.append(f"Income Statement sheet match: {is_sheet!r}")
     if is_sheet:
         ws = wb[is_sheet]
         # Find the most recent period column (last non-empty column in header row)
@@ -204,15 +213,21 @@ def _precompute_mitra_metrics(wb) -> str:
                 detail = " + ".join(f"{k}={v:.2f}" for k, v in ebitda_components.items())
                 computed.append(f"PRE-COMPUTED EBITDA for {period_label} = {ebitda:.2f} (calculated as: {detail})")
 
+    block = ""
     if computed:
-        return "[PRE-COMPUTED METRICS — use these values directly, do not recalculate]\n" + "\n".join(computed) + "\n"
-    return ""
+        block = "[PRE-COMPUTED METRICS — use these values directly, do not recalculate]\n" + "\n".join(computed) + "\n"
+    return block, diagnostics
+
+
+_last_excel_diagnostics: list[str] = []
 
 
 def extract_from_excel(data: bytes) -> str:
+    global _last_excel_diagnostics
     import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(data), data_only=True)
-    precomputed = _precompute_mitra_metrics(wb)
+    precomputed, diagnostics = _precompute_mitra_metrics(wb)
+    _last_excel_diagnostics = diagnostics
     parts = []
     for sheet_name in wb.sheetnames:
         # Skip raw general ledger / trial balance sheets — too large, not useful for KPI extraction
@@ -228,6 +243,10 @@ def extract_from_excel(data: bytes) -> str:
     full_text = "\n\n".join(parts)
     combined = (precomputed + "\n\n" + full_text) if precomputed else full_text
     return combined[:MAX_CHARS]
+
+
+def get_last_excel_diagnostics() -> list[str]:
+    return list(_last_excel_diagnostics)
 
 
 def extract_text(filename: str, data: bytes) -> str:
