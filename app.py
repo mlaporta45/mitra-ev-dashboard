@@ -350,6 +350,11 @@ elif page == "📤 Upload":
                 for name, info in mets.items():
                     if isinstance(info, dict) and info.get("value") is not None:
                         rows.append({"Metric": name, "Value": info.get("value_text") or str(info.get("value")), "Unit": info.get("unit", "")})
+                # Compute Truck MRR if both components extracted
+                _lease = (mets.get("EV Vehicle Leases Revenue") or {}).get("value")
+                _vis = (mets.get("Vehicles in Service") or {}).get("value")
+                if _lease is not None and _vis and _vis > 0:
+                    rows.append({"Metric": "Truck MRR (derived)", "Value": fmt_money(_lease / _vis), "Unit": "$"})
                 if rows:
                     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
