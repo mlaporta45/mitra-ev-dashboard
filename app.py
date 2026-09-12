@@ -95,6 +95,32 @@ def delta_pct(curr, prev):
     return (curr - prev) / abs(prev) * 100
 
 
+def find_prior_quarter(periods, selected):
+    """Return the period closest to 3 months before `selected`, or None."""
+    from datetime import datetime
+    try:
+        sel_date = datetime.strptime(selected, "%m/%d/%y")
+    except ValueError:
+        return None
+    target_month = sel_date.month - 3
+    target_year = sel_date.year
+    if target_month <= 0:
+        target_month += 12
+        target_year -= 1
+    best, best_diff = None, None
+    for p in periods:
+        if p == selected:
+            continue
+        try:
+            pd_date = datetime.strptime(p, "%m/%d/%y")
+        except ValueError:
+            continue
+        diff = abs((pd_date.year - target_year) * 12 + (pd_date.month - target_month))
+        if best_diff is None or diff < best_diff:
+            best_diff, best = diff, p
+    return best if best_diff is not None and best_diff <= 2 else None
+
+
 def covenant_badge(status):
     if status == "pass":
         return '<span class="badge-pass">PASS</span>'
@@ -103,7 +129,7 @@ def covenant_badge(status):
     return '<span class="badge-na">N/A</span>'
 
 
-def kpi_card(label, value_str, delta=None, delta_label="vs prior period"):
+def kpi_card(label, value_str, delta=None, delta_label="vs prior quarter"):
     delta_html = ""
     if delta is not None:
         arrow = "▲" if delta >= 0 else "▼"
@@ -145,15 +171,23 @@ if page == "📊 Overview":
     metrics = get_metrics_for_period(selected)
     covenants = get_covenants_for_period(selected)
 
-    # Prior period for delta
-    idx = periods.index(selected)
-    prior_metrics = get_metrics_for_period(periods[idx - 1]) if idx > 0 else {}
+    # Prior quarter for delta
+    prior_period = find_prior_quarter(periods, selected)
+    prior_metrics = get_metrics_for_period(prior_period) if prior_period else {}
 
     def mv(name):
+        if name == "Truck MRR":
+            lease = (metrics.get("EV Vehicle Leases Revenue") or {}).get("value")
+            vis = (metrics.get("Vehicles in Service") or {}).get("value")
+            return (lease / vis) if (lease is not None and vis and vis > 0) else None
         info = metrics.get(name, {})
         return info.get("value") if info else None
 
     def pmv(name):
+        if name == "Truck MRR":
+            lease = (prior_metrics.get("EV Vehicle Leases Revenue") or {}).get("value")
+            vis = (prior_metrics.get("Vehicles in Service") or {}).get("value")
+            return (lease / vis) if (lease is not None and vis and vis > 0) else None
         info = prior_metrics.get(name, {})
         return info.get("value") if info else None
 
@@ -332,7 +366,7 @@ elif page == "📤 Upload":
 # PAGE: Trends
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "📈 Trends":
-    st.title("Trends — Month Over Month")
+    st.title("Trends — Quarter Over Quarter")
 
     periods = get_all_periods()
     if len(periods) < 2:
@@ -356,14 +390,29 @@ elif page == "📈 Trends":
             fig = go.Figure()
             has_data = False
             for metric in metric_list:
-                series = get_metric_timeseries(metric)
-                if not series:
+                if metric == "Truck MRR":
+                    # Compute as EV Lease Revenue / Vehicles in Service per period
+                    lease_series = {r["period"]: r["value"] for r in get_metric_timeseries("EV Vehicle Leases Revenue")}
+                    vis_series   = {r["period"]: r["value"] for r in get_metric_timeseries("Vehicles in Service")}
+                    common = sorted(set(lease_series) & set(vis_series))
+                    xs = common
+                    ys = [
+                        lease_series[p] / vis_series[p]
+                        if (lease_series.get(p) is not None and vis_series.get(p) and vis_series[p] > 0)
+                        else None
+                        for p in common
+                    ]
+                else:
+                    series = get_metric_timeseries(metric)
+                    if not series:
+                        continue
+                    xs = [r["period"] for r in series]
+                    ys = [r["value"] for r in series]
+                    unit = series[0].get("unit", "")
+                    if unit == "%":
+                        ys = [v * 100 if v is not None and v < 1 else v for v in ys]
+                if not xs:
                     continue
-                xs = [r["period"] for r in series]
-                ys = [r["value"] for r in series]
-                unit = series[0].get("unit", "")
-                if unit == "%" :
-                    ys = [v * 100 if v is not None and v < 1 else v for v in ys]
                 fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name=metric))
                 has_data = True
 
