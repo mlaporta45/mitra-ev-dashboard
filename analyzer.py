@@ -54,10 +54,17 @@ ALWAYS return valid JSON matching this exact schema (use null for any field not 
 Rules:
 - All monetary values must be raw numbers in dollars (not thousands or millions — convert if necessary).
 - If a value is in millions, multiply by 1,000,000. If in thousands, multiply by 1,000.
-- DCFC Avg. Utilization Rate should be a percentage as a decimal (e.g., 0.32 for 32%) or as a percent number (32.0) — use whatever the document shows, but note the unit.
+- DCFC Avg. Utilization Rate should be stored as a decimal (e.g., 0.0032 for 0.32%). Do NOT multiply by 100.
 - For covenants, infer pass/fail if you can determine both actual and threshold.
 - Detect the reporting period from document headers, footers, titles, or date references.
 - Set confidence to "high" if you found clear numeric tables, "medium" if inferred from text, "low" if mostly absent.
+
+PRE-COMPUTED METRIC RULES (IMPORTANT):
+- If the document contains a "[PRE-COMPUTED METRICS]" section, use those values DIRECTLY for the listed metrics — do not recalculate.
+- Vehicles in Service: use the PRE-COMPUTED count from the Fleet List (VEH. STATUS = In-Service).
+- DCFC in Service: use the PRE-COMPUTED count of charger entries for the latest month.
+- DCFC Avg. Utilization Rate: use the PRE-COMPUTED value (already a decimal).
+- EBITDA: use the PRE-COMPUTED value which equals Net Income + Depreciation + Amortization + Interest Expense + Taxes. If not pre-computed, calculate it yourself from the Income Statement: find Net Income/Loss, add back Depreciation Expense, Amortization, Interest Expense, and Taxes & Licenses.
 """
 
 
