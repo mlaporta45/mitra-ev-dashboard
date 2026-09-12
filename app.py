@@ -299,9 +299,14 @@ elif page == "📤 Upload":
     )
 
     uploaded = st.file_uploader(
-        "Drop files here",
+        "Drop files here — you can select multiple files at once",
         type=["pdf", "docx", "doc", "pptx", "ppt", "xlsx", "xlsm", "xls"],
         accept_multiple_files=True,
+    )
+
+    force_reprocess = st.checkbox(
+        "Force re-process (use if you updated a file or want to re-run AI on a previously uploaded file)",
+        value=False,
     )
 
     if st.button("⚡ Process Files", type="primary", disabled=not uploaded):
@@ -312,8 +317,8 @@ elif page == "📤 Upload":
             with st.expander(f"📄 {uf.name}", expanded=True):
                 log = st.empty()
 
-                if file_already_processed(fhash):
-                    log.success("✅ Already processed — no API call needed (file unchanged).")
+                if not force_reprocess and file_already_processed(fhash):
+                    log.success("✅ Already processed — no API call needed (file unchanged). Check 'Force re-process' to re-run.")
                     continue
 
                 log.info("Extracting text...")
